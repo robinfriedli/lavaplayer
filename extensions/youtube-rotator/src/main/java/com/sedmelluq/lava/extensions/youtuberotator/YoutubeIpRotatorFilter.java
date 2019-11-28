@@ -1,30 +1,32 @@
 package com.sedmelluq.lava.extensions.youtuberotator;
 
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager;
-import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeHttpContextFilter;
+import com.sedmelluq.discord.lavaplayer.tools.http.HttpContextFilter;
 import com.sedmelluq.lava.extensions.youtuberotator.planner.AbstractRoutePlanner;
 import com.sedmelluq.lava.extensions.youtuberotator.tools.RateLimitException;
-import org.apache.http.Header;
+import java.net.BindException;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.BindException;
-
-public class YoutubeIpRotator extends YoutubeHttpContextFilter {
-  private static final Logger log = LoggerFactory.getLogger(YoutubeIpRotator.class);
+public class YoutubeIpRotatorFilter implements HttpContextFilter {
+  private static final Logger log = LoggerFactory.getLogger(YoutubeIpRotatorFilter.class);
 
   private static final String RETRY_COUNT_ATTRIBUTE = "yt-retry-counter";
-  private static final int DEFAULT_RETRY_LIMIT = 4;
 
+  private final HttpContextFilter delegate;
   private final boolean isSearch;
   private final AbstractRoutePlanner routePlanner;
   private final int retryLimit;
 
-  private YoutubeIpRotator(boolean isSearch, AbstractRoutePlanner routePlanner, int retryLimit) {
+  public YoutubeIpRotatorFilter(
+      HttpContextFilter delegate,
+      boolean isSearch,
+      AbstractRoutePlanner routePlanner,
+      int retryLimit
+  ) {
+    this.delegate = delegate;
     this.isSearch = isSearch;
     this.routePlanner = routePlanner;
     this.retryLimit = retryLimit;
@@ -32,12 +34,16 @@ public class YoutubeIpRotator extends YoutubeHttpContextFilter {
 
   @Override
   public void onContextOpen(HttpClientContext context) {
-    super.onContextOpen(context);
+    if (delegate != null) {
+      delegate.onContextOpen(context);
+    }
   }
 
   @Override
   public void onContextClose(HttpClientContext context) {
-    super.onContextClose(context);
+    if (delegate != null) {
+      delegate.onContextClose(context);
+    }
   }
 
   @Override
@@ -48,7 +54,9 @@ public class YoutubeIpRotator extends YoutubeHttpContextFilter {
       setRetryCount(context, 0);
     }
 
-    super.onRequest(context, request, isRepetition);
+    if (delegate != null) {
+      delegate.onRequest(context, request, isRepetition);
+    }
   }
 
   @Override
@@ -64,7 +72,7 @@ public class YoutubeIpRotator extends YoutubeHttpContextFilter {
 
         return limitedRetry(context);
       }
-    } else if (isRateLimited(request, response)) {
+    } else if (isRateLimited(response)) {
       log.warn("YouTube rate limit reached, marking address {} as failing and retry",
           routePlanner.getLastAddress(context));
       routePlanner.markAddressFailing(context);
@@ -72,20 +80,16 @@ public class YoutubeIpRotator extends YoutubeHttpContextFilter {
       return limitedRetry(context);
     }
 
-    return super.onRequestResponse(context, request, response);
+    if (delegate != null) {
+      return delegate.onRequestResponse(context, request, response);
+    } else {
+      return false;
+    }
   }
 
-  private boolean isRateLimited(HttpUriRequest request, HttpResponse response) {
+  private boolean isRateLimited(HttpResponse response) {
     int statusCode = response.getStatusLine().getStatusCode();
-
-    if (statusCode == 429) {
-      return true;
-    } else if (request.getURI().toString().contains("pbj=1")) {
-      Header contentType = response.getFirstHeader("content-type");
-      return contentType != null && contentType.getValue().contains("text/html");
-    }
-
-    return false;
+    return statusCode == 429;
   }
 
   @Override
@@ -95,43 +99,13 @@ public class YoutubeIpRotator extends YoutubeHttpContextFilter {
           routePlanner.getLastAddress(context));
 
       routePlanner.markAddressFailing(context);
-      return true;
+      return limitedRetry(context);
     }
 
-    return super.onRequestException(context, request, error);
-  }
-
-  public static void setup(YoutubeAudioSourceManager sourceManager, AbstractRoutePlanner routePlanner) {
-    setup(sourceManager, routePlanner, DEFAULT_RETRY_LIMIT);
-  }
-
-  public static void setup(YoutubeAudioSourceManager sourceManager, AbstractRoutePlanner routePlanner, int retryLimit) {
-    sourceManager.configureBuilder(it ->
-        it.setRoutePlanner(routePlanner)
-    );
-
-    sourceManager
-        .getMainHttpConfiguration()
-        .setHttpContextFilter(new YoutubeIpRotator(false, routePlanner, retryLimit));
-
-    sourceManager
-        .getSearchHttpConfiguration()
-        .setHttpContextFilter(new YoutubeIpRotator(true, routePlanner, retryLimit));
-  }
-
-  public static void setup(AudioPlayerManager playerManager, AbstractRoutePlanner routePlanner) {
-    YoutubeAudioSourceManager sourceManager = playerManager.source(YoutubeAudioSourceManager.class);
-
-    if (sourceManager != null) {
-      setup(sourceManager, routePlanner, DEFAULT_RETRY_LIMIT);
-    }
-  }
-
-  public static void setup(AudioPlayerManager playerManager, AbstractRoutePlanner routePlanner, int retryLimit) {
-    YoutubeAudioSourceManager sourceManager = playerManager.source(YoutubeAudioSourceManager.class);
-
-    if (sourceManager != null) {
-      setup(sourceManager, routePlanner, retryLimit);
+    if (delegate != null) {
+      return delegate.onRequestException(context, request, error);
+    } else {
+      return false;
     }
   }
 

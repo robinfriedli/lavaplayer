@@ -16,6 +16,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.sedmelluq.discord.lavaplayer.track.BasicAudioPlaylist;
 import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -72,7 +73,7 @@ public class BandcampAudioSourceManager implements AudioSourceManager, HttpConfi
     return extractFromPage(trackUrl, (httpClient, text) -> {
       String bandUrl = readBandUrl(text);
       JsonBrowser trackListInfo = readTrackListInformation(text);
-      String artist = trackListInfo.get("artist").text();
+      String artist = trackListInfo.get("artist").safeText();
 
       return extractTrack(trackListInfo.get("trackinfo").index(0), bandUrl, artist);
     });
@@ -153,9 +154,9 @@ public class BandcampAudioSourceManager implements AudioSourceManager, HttpConfi
     try (CloseableHttpResponse response = httpInterface.execute(new HttpGet(url))) {
       int statusCode = response.getStatusLine().getStatusCode();
 
-      if (statusCode == 404) {
+      if (statusCode == HttpStatus.SC_NOT_FOUND) {
         return new AudioReference(null, null);
-      } else if (statusCode != 200) {
+      } else if (!HttpClientTools.isSuccessWithContent(statusCode)) {
         throw new IOException("Invalid status code for track page: " + statusCode);
       }
 
