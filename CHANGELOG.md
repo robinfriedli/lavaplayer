@@ -1,5 +1,136 @@
 # Change Log
 
+## [1.3.50] -- 2020-06-17
+### Fixed
+- Fixed YT search sometimes not finding anything because of YT providing different format (PR 492 by Frederikam).
+
+## [1.3.49] -- 2020-05-21
+### Fixed
+- Fixed Twitch streaming breaking due to API change (PR 480 by Devoxin).
+- Fixed YT private videos providing invalid result instead of failing (PR 479 by Devoxin).
+
+## [1.3.48] -- 2020-05-12
+### Fixed
+- Fixed some YouTube tracks not working because of cipher detection issues (PR 475 by Devoxin).
+
+## [1.3.47] -- 2020-04-13
+### Fixed
+- Fixed loading YouTube live streams within playlists (PR 294 by Devoxin).
+
+## [1.3.46] -- 2020-04-07
+### Fixed
+- Fixed YouTube mix loading, mixes loaded with just one request now (PR 293 by Devoxin).
+
+## [1.3.45] -- 2020-04-07
+### Fixed
+- Fixed some YouTube live streams not being loaded and randomly stopping (PR 291 by Devoxin).
+
+## [1.3.44] -- 2020-04-04
+### Fixed
+- Fixed failing to load SoundCloud playlists with more than 50 tracks (PR 290 by Devoxin).
+
+## [1.3.43] -- 2020-04-02
+### Fixed
+- Fixed SoundCloud connection leaks which eventually caused pool limit to be reached and new connections getting stuck.
+
+## [1.3.42] -- 2020-04-01
+### Added
+- Added `AbstractHttpContextFilter` to easily create additional HTTP context filters with delegates.
+
+## [1.3.41] -- 2020-04-01
+### Added
+- Added support for GetYarn.io as a source (PR 277 by duncte123).
+
+### Fixed
+- Fixed audio event adapter method with stuck stacktrace included not getting called.
+
+## [1.3.40] -- 2020-03-28
+### Added
+- Added `SimpleHttpClientConnectionManager` to sources which can be used to disable pooling for HTTP of some source.
+
+## [1.3.39] -- 2020-03-27
+### Added
+- Added method to set Apache HTTP connection manager factory to customize connection handling.
+
+### Changed
+- Track stuck events now provide stacktrace of the struck thread.
+
+## [1.3.38] -- 2020-03-23
+### Fixed
+- Fixed unable to fetch YouTube player script for ciphered URLs.
+
+## [1.3.37] -- 2020-03-23
+### Changed
+- Unexpected response code from YouTube player script request now logs more details.
+
+## [1.3.36] -- 2020-03-22
+### Added
+- Added method to provide a set of IPs to be used for making an HTTP connection without choosing a specific one.
+
+### Changed
+- HTTP connection failure exceptions now contain all details about the connection that was being established.
+
+## [1.3.35] -- 2020-03-09
+### Fixed
+- Fixed NPE for unavailable SoundCloud tracks (PR 276 by duncte123).
+
+## [1.3.34] -- 2020-01-27
+### Fixed
+- Fixed YouTube missing fallback to embed page for "objectionable content" videos (PR 270 by Xavinlol).
+
+## [1.3.33] -- 2020-01-05
+### Fixed
+- Fixed NPE instead of common exception for missing YouTube video (PR 264 by duncte123).
+- Fixed blocked tracks included in SoundCloud liked tracks result (PR 261 by nikammerlaan).
+
+### Added
+- Added builder for SoundCloud source manager.
+- Added a more concise way to create an extended media container registry.
+
+## [1.3.32] -- 2019-12-01
+### Fixed
+- Fixed SoundCloud tracks longer than 30 minutes breaking during playback due to URLs expiring.
+
+## [1.3.31] -- 2019-12-01
+### Fixed
+- Fixed redundant retry attempts for SoundCloud liked tracks and search result pages.
+
+## [1.3.30] -- 2019-12-01
+### Changed
+- SoundCloud source manager is now modular and more easily extendable.
+
+### Fixed
+- Fixed non-opus tracks no longer working due to old stream API not being available anymore.
+- Fixed SoundCloud opus seeking not working when applied before track starts.
+
+## [1.3.29] -- 2019-11-25
+### Fixed
+- Fixed SoundCloud opus seeking not working.
+
+## [1.3.28] -- 2019-11-25
+### Fixed
+- Fixed response code 203 treated as an error everywhere.
+
+## [1.3.27] -- 2019-11-19
+### Fixed
+- Fixed SoundCloud track loading failing if no opus track is available.
+
+## [1.3.26] -- 2019-11-19
+### Added
+- Support for SoundCloud opus streams by default, old MP3 streams only used if opus is not available.
+
+## [1.3.25] -- 2019-11-06
+### Changed
+- Manipulation of HTTP requests and triggering retries with HTTP context filter instead of a simple request modifier.
+
+## [1.3.24] -- 2019-11-06
+### Added
+- HTTP request modifier interface which allows modifying outgoing requests.
+
+## [1.3.23] -- 2019-10-28
+### Changed
+- Use YouTube pbj=1 requests for tracks and playlists.
+
 ## [1.3.22] -- 2019-09-11
 ### Fixed
 - Fixed new track formats breaking YouTube track loading (PR 210 by Ferderikam) 

@@ -10,11 +10,10 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.sedmelluq.discord.lavaplayer.track.DelegatedAudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.playback.LocalAudioTrackExecutor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Audio track that handles processing SoundCloud tracks.
@@ -37,32 +36,43 @@ public class SoundCloudAudioTrack extends DelegatedAudioTrack {
   @Override
   public void process(LocalAudioTrackExecutor localExecutor) throws Exception {
     try (HttpInterface httpInterface = sourceManager.getHttpInterface()) {
-      if (trackInfo.identifier.startsWith("O:")) {
-        loadFromOpusStream(localExecutor, httpInterface);
-      } else {
-        loadFromMp3Url(localExecutor, httpInterface);
-      }
+      playFromIdentifier(httpInterface, trackInfo.identifier, false, localExecutor);
     }
   }
 
-  private void loadFromOpusStream(LocalAudioTrackExecutor localExecutor, HttpInterface httpInterface) throws Exception {
-    String streamLookupUrl = trackInfo.identifier.substring(2);
-    String m3uProviderUrl;
+  private void playFromIdentifier(
+      HttpInterface httpInterface,
+      String identifier,
+      boolean recursion,
+      LocalAudioTrackExecutor localExecutor
+  ) throws Exception {
+    String opusLookupUrl = sourceManager.getFormatHandler().getOpusLookupUrl(identifier);
 
-    try (PersistentHttpStream stream = new PersistentHttpStream(httpInterface, new URI(streamLookupUrl), null)) {
-      if (!HttpClientTools.isSuccessWithContent(stream.checkStatusCode())) {
-        throw new IOException("Invalid status code for soundcloud stream: " + stream.checkStatusCode());
-      }
-
-      JsonBrowser json = JsonBrowser.parse(stream);
-      m3uProviderUrl = json.get("url").text();
+    if (opusLookupUrl != null) {
+      processDelegate(new SoundCloudOpusM3uAudioTrack(trackInfo, httpInterface, opusLookupUrl), localExecutor);
+      return;
     }
 
-    processDelegate(new SoundCloudOpusM3uAudioTrack(trackInfo, httpInterface, m3uProviderUrl), localExecutor);
+    String mp3LookupUrl = sourceManager.getFormatHandler().getMp3LookupUrl(identifier);
+
+    if (mp3LookupUrl != null) {
+      String playbackUrl = SoundCloudHelper.loadPlaybackUrl(httpInterface, identifier.substring(2));
+      loadFromMp3Url(localExecutor, httpInterface, playbackUrl);
+      return;
+    }
+
+    if (!recursion) {
+      // Old "track ID" entry? Let's "load" it to get url.
+      AudioTrack track = sourceManager.loadFromTrackPage(trackInfo.uri);
+      playFromIdentifier(httpInterface, track.getIdentifier(), true, localExecutor);
+    }
   }
 
-  private void loadFromMp3Url(LocalAudioTrackExecutor localExecutor, HttpInterface httpInterface) throws Exception {
-    String trackUrl = sourceManager.getTrackUrlFromId(trackInfo.identifier);
+  private void loadFromMp3Url(
+      LocalAudioTrackExecutor localExecutor,
+      HttpInterface httpInterface,
+      String trackUrl
+  ) throws Exception {
     log.debug("Starting SoundCloud track from URL: {}", trackUrl);
 
     try (PersistentHttpStream stream = new PersistentHttpStream(httpInterface, new URI(trackUrl), null)) {

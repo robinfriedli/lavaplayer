@@ -5,6 +5,7 @@ import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.tools.ExceptionTools;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.tools.JsonBrowser;
+import com.sedmelluq.discord.lavaplayer.tools.Units;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpConfigurable;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterface;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterfaceManager;
@@ -74,12 +75,14 @@ public class TwitchStreamAudioSourceManager implements AudioSourceManager, HttpC
 
     JsonBrowser channelInfo = fetchStreamChannelInfo(streamName);
 
-    if (channelInfo == null) {
+    if (channelInfo == null || channelInfo.get("stream").isNull()) {
       return AudioReference.NO_TRACK;
     } else {
       //Use the stream name as the display name (we would require an additional call to the user to get the true display name)
       String displayName = streamName;
-      
+
+      /*
+      --- HELIX STUFF
       //Retrieve the data value list; this will have only one element since we're getting only one stream's information
       List<JsonBrowser> dataList = channelInfo.get("data").values();
     
@@ -91,11 +94,15 @@ public class TwitchStreamAudioSourceManager implements AudioSourceManager, HttpC
       //The first one has the title of the broadcast
       JsonBrowser channelData = dataList.get(0);
       String status = channelData.get("title").text();
+       */
+
+      JsonBrowser channelData = channelInfo.get("stream").get("channel");
+      String status = channelData.get("status").text();
 
       return new TwitchStreamAudioTrack(new AudioTrackInfo(
           status,
           displayName,
-          Long.MAX_VALUE,
+          Units.DURATION_MS_UNKNOWN,
           reference.identifier,
           true,
           reference.identifier
@@ -172,7 +179,8 @@ public class TwitchStreamAudioSourceManager implements AudioSourceManager, HttpC
 
   private JsonBrowser fetchStreamChannelInfo(String name) {
     try (HttpInterface httpInterface = getHttpInterface()) {
-      HttpUriRequest request = createGetRequest("https://api.twitch.tv/helix/streams?user_login=" + name);
+      // helix/streams?user_login=name
+      HttpUriRequest request = createGetRequest("https://api.twitch.tv/kraken/streams/" + name + "?stream_type=all");
 
       return HttpClientTools.fetchResponseAsJson(httpInterface, request);
     } catch (IOException e) {

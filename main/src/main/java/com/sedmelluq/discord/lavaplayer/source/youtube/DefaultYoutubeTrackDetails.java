@@ -3,6 +3,7 @@ package com.sedmelluq.discord.lavaplayer.source.youtube;
 import com.sedmelluq.discord.lavaplayer.tools.DataFormatTools;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.tools.JsonBrowser;
+import com.sedmelluq.discord.lavaplayer.tools.Units;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpClientTools;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterface;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
@@ -26,6 +27,9 @@ import org.slf4j.LoggerFactory;
 import static com.sedmelluq.discord.lavaplayer.tools.DataFormatTools.convertToMapLayout;
 import static com.sedmelluq.discord.lavaplayer.tools.FriendlyException.Severity.COMMON;
 import static com.sedmelluq.discord.lavaplayer.tools.FriendlyException.Severity.SUSPICIOUS;
+import static com.sedmelluq.discord.lavaplayer.tools.Units.CONTENT_LENGTH_UNKNOWN;
+import static com.sedmelluq.discord.lavaplayer.tools.Units.DURATION_MS_UNKNOWN;
+import static com.sedmelluq.discord.lavaplayer.tools.Units.DURATION_SEC_UNKNOWN;
 
 public class DefaultYoutubeTrackDetails implements YoutubeTrackDetails {
   private static final Logger log = LoggerFactory.getLogger(DefaultYoutubeTrackDetails.class);
@@ -77,12 +81,13 @@ public class DefaultYoutubeTrackDetails implements YoutubeTrackDetails {
     String playerResponse = args.get("player_response").text();
 
     if (playerResponse != null) {
-      JsonBrowser streamingData = JsonBrowser.parse(playerResponse)
-          .get("streamingData");
+      JsonBrowser playerData = JsonBrowser.parse(playerResponse);
+      JsonBrowser streamingData = playerData.get("streamingData");
+      boolean isLive = playerData.get("videoDetails").get("isLive").asBoolean(false);
 
       if (!streamingData.isNull()) {
-        List<YoutubeTrackFormat> formats = loadTrackFormatsFromStreamingData(streamingData.get("formats"));
-        formats.addAll(loadTrackFormatsFromStreamingData(streamingData.get("adaptiveFormats")));
+        List<YoutubeTrackFormat> formats = loadTrackFormatsFromStreamingData(streamingData.get("formats"), isLive);
+        formats.addAll(loadTrackFormatsFromStreamingData(streamingData.get("adaptiveFormats"), isLive));
 
         if (!formats.isEmpty()) {
           return formats;
@@ -167,29 +172,34 @@ public class DefaultYoutubeTrackDetails implements YoutubeTrackDetails {
     return tracks;
   }
 
-  private List<YoutubeTrackFormat> loadTrackFormatsFromStreamingData(JsonBrowser formats) {
+  private List<YoutubeTrackFormat> loadTrackFormatsFromStreamingData(JsonBrowser formats, boolean isLive) {
     List<YoutubeTrackFormat> tracks = new ArrayList<>();
     boolean anyFailures = false;
 
     if (!formats.isNull() && formats.isList()) {
       for (JsonBrowser formatJson : formats.values()) {
         String cipher = formatJson.get("cipher").text();
+
+        if (cipher == null) {
+          cipher = formatJson.get("signatureCipher").text();
+        }
+
         Map<String, String> cipherInfo = cipher != null
             ? decodeUrlEncodedItems(cipher, true)
             : Collections.emptyMap();
 
         try {
-          JsonBrowser contentLength = formatJson.get("contentLength");
+          long contentLength = formatJson.get("contentLength").asLong(CONTENT_LENGTH_UNKNOWN);
 
-          if (contentLength.isNull()) {
-            log.debug("Could not find content length from streamingData format {}, skipping", formatJson.format());
+          if (contentLength == CONTENT_LENGTH_UNKNOWN && !isLive) {
+            log.debug("Track not a live stream, but no contentLength in format {}, skipping", formatJson.format());
             continue;
           }
 
           tracks.add(new YoutubeTrackFormat(
               ContentType.parse(formatJson.get("mimeType").text()),
-              formatJson.get("bitrate").as(Long.class),
-              contentLength.as(Long.class),
+              formatJson.get("bitrate").asLong(Units.BITRATE_UNKNOWN),
+              contentLength,
               cipherInfo.getOrDefault("url", formatJson.get("url").text()),
               cipherInfo.get("s"),
               cipherInfo.getOrDefault("sp", DEFAULT_SIGNATURE_KEY)
@@ -285,7 +295,7 @@ public class DefaultYoutubeTrackDetails implements YoutubeTrackDetails {
       }
 
       boolean isStream = "1".equals(args.get("live_playback").text());
-      long duration = isStream ? Long.MAX_VALUE : args.get("length_seconds").as(Long.class) * 1000;
+      long duration = extractDurationSeconds(isStream, args, "length_seconds");
       return buildTrackInfo(videoId, args.get("title").text(), args.get("author").text(), isStream, duration);
     }
 
@@ -298,10 +308,18 @@ public class DefaultYoutubeTrackDetails implements YoutubeTrackDetails {
 
     JsonBrowser videoDetails = playerResponse.get("videoDetails");
 
-    boolean isStream = videoDetails.get("isLiveContent").as(Boolean.class);
-    long duration = isStream ? Long.MAX_VALUE : videoDetails.get("lengthSeconds").as(Long.class) * 1000;
+    boolean isStream = "0".equals(videoDetails.get("lengthSeconds").text());
+    long duration = extractDurationSeconds(isStream, videoDetails, "lengthSeconds");
 
     return buildTrackInfo(videoId, videoDetails.get("title").text(), videoDetails.get("author").text(), isStream, duration);
+  }
+
+  private long extractDurationSeconds(boolean isStream, JsonBrowser object, String field) {
+    if (isStream) {
+      return DURATION_MS_UNKNOWN;
+    }
+
+    return Units.secondsToMillis(object.get(field).asLong(DURATION_SEC_UNKNOWN));
   }
 
   private AudioTrackInfo buildTrackInfo(String videoId, String title, String uploader, boolean isStream, long duration) {

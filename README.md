@@ -18,7 +18,7 @@ repositories {
 }
 
 dependencies {
-  compile 'com.sedmelluq:lavaplayer:x.y.z'
+  implementation 'com.sedmelluq:lavaplayer:x.y.z'
 }
 ```
 
@@ -28,7 +28,7 @@ Using in Maven:
   <repository>
     <id>central</id>
     <name>bintray</name>
-    <url>http://jcenter.bintray.com</url>
+    <url>https://jcenter.bintray.com</url>
   </repository>
 </repositories>
 

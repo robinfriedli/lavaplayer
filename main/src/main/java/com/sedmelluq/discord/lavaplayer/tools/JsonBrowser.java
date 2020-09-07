@@ -138,6 +138,38 @@ public class JsonBrowser {
     return null;
   }
 
+  public boolean asBoolean(boolean defaultValue) {
+    if (node != null) {
+      if (node.isBoolean()) {
+        return node.booleanValue();
+      } else if (node.isTextual()) {
+        if ("true".equals(node.textValue())) {
+          return true;
+        } else if ("false".equals(node.textValue())) {
+          return false;
+        }
+      }
+    }
+
+    return defaultValue;
+  }
+
+  public long asLong(long defaultValue) {
+    if (node != null) {
+      if (node.isNumber()) {
+        return node.numberValue().longValue();
+      } else if (node.isTextual()) {
+        try {
+          return Long.parseLong(node.textValue());
+        } catch (NumberFormatException ignored) {
+          // Fall through to default value.
+        }
+      }
+    }
+
+    return defaultValue;
+  }
+
   public String safeText() {
     String text = text();
     return text != null ? text : "";
